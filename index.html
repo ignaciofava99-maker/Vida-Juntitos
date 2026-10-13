@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Gastos 50-50</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#2a5bd7">
+<link rel="icon" type="image/svg+xml" href="icon.svg">
+<link rel="apple-touch-icon" href="icon.svg">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Gastos 50-50">
+<style>
+  :root { --bg:#f6f5f2; --card:#fff; --txt:#1f1f1f; --mut:#777; --ok:#1b8a4b; --warn:#c0392b; --acc:#2a5bd7; --line:#e6e6e6; --inp:#fff; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#141414; --card:#1f1f1f; --txt:#eee; --mut:#999; --line:#333; --inp:#2a2a2a; --ok:#4cc17e; --warn:#ff7a6b; --acc:#6b8cff; } }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:-apple-system,Segoe UI,Roboto,sans-serif; background:var(--bg); color:var(--txt);
+    padding:calc(14px + env(safe-area-inset-top,0px)) calc(14px + env(safe-area-inset-right,0px)) calc(24px + env(safe-area-inset-bottom,0px)) calc(14px + env(safe-area-inset-left,0px)); }
+  .wrap { max-width:520px; margin:auto; }
+  .card { background:var(--card); border-radius:14px; padding:14px; margin-bottom:12px; box-shadow:0 1px 3px rgba(0,0,0,.1); }
+  h2 { margin:0 0 8px; font-size:16px; }
+  .saldo { text-align:center; }
+  .big { font-size:32px; font-weight:700; margin:4px 0; }
+  .ok { color:var(--ok); }
+  label { display:block; font-size:12px; color:var(--mut); margin:10px 0 3px; }
+  input, select { width:100%; padding:10px; border:1px solid var(--line); border-radius:10px; font-size:16px; background:var(--inp); color:var(--txt); }
+  .seg { display:flex; gap:6px; }
+  .seg button { flex:1; padding:10px 4px; border:1px solid var(--line); background:var(--inp); color:var(--txt); border-radius:10px; font-size:14px; }
+  .seg button.on { background:var(--acc); color:#fff; border-color:var(--acc); }
+  .btn { width:100%; padding:13px; margin-top:12px; border:0; border-radius:12px; font-size:16px; font-weight:600; background:var(--acc); color:#fff; }
+  .btn.sec { background:var(--line); color:var(--txt); }
+  .btn:disabled { opacity:.5; }
+  .row { display:flex; justify-content:space-between; align-items:center; padding:9px 0; border-bottom:1px solid var(--line); font-size:14px; gap:8px; }
+  .row:last-child { border-bottom:0; }
+  .row small { color:var(--mut); display:block; }
+  .x { background:none; border:0; color:var(--warn); font-size:18px; padding:4px 8px; }
+  .hide { display:none !important; }
+  .mut { color:var(--mut); font-size:13px; }
+  .rep { white-space:pre-wrap; font-size:14px; background:var(--inp); border:1px solid var(--line); border-radius:10px; padding:10px; margin:0; font-family:inherit; }
+  .top { display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; }
+  .top b { font-size:18px; }
+  .link { background:none; border:0; color:var(--acc); font-size:13px; padding:6px 0; text-decoration:underline; }
+  #estado { font-size:12px; color:var(--mut); }
+  #estado.err { color:var(--warn); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<div class="top"><b>💸 Gastos 50-50</b><span id="estado"></span></div>
+
+<!-- Conexión (se muestra solo la primera vez en cada celu) -->
+<div id="setup" class="card hide">
+  <h2>Conectar con la hoja de Google</h2>
+  <p class="mut">Esto se hace una sola vez en cada celu. Si María Paula recibió un link de invitación, con abrirlo alcanza.</p>
+  <label>URL de la aplicación web (Apps Script)</label>
+  <input id="cfgUrl" placeholder="https://script.google.com/macros/s/.../exec" autocapitalize="off" autocorrect="off">
+  <label>Clave</label>
+  <input id="cfgKey" placeholder="La clave que está en Code.gs" autocapitalize="off" autocorrect="off">
+  <button class="btn" onclick="conectar()">Conectar</button>
+</div>
+
+<div id="app" class="hide">
+
+<div class="card saldo">
+  <div id="saldoTxt" class="mut">Cargando…</div>
+  <div id="saldoMonto" class="big"></div>
+  <div class="mut">Gastado en este período: <b id="totMes">-</b></div>
+</div>
+
+<div class="card">
+  <h2>Nuevo gasto</h2>
+  <label>Descripción</label>
+  <input id="desc" placeholder="Ej: Supermercado">
+  <label>Monto</label>
+  <input id="monto" type="number" inputmode="decimal" placeholder="0">
+  <label>¿Quién pagó?</label>
+  <div class="seg" id="segPago"><button class="on" data-v="Nacho">Nacho</button><button data-v="María Paula">María Paula</button></div>
+  <label>Categoría</label>
+  <select id="cat"><option>Súper</option><option>Comida afuera</option><option>Servicios</option><option>Alquiler</option><option>Salidas</option><option>Transporte</option><option>Hogar</option><option>Otros</option></select>
+  <label>Fecha</label>
+  <input id="fecha" type="date">
+  <button id="btnAdd" class="btn" onclick="agregar()">Guardar gasto</button>
+</div>
+
+<div class="card">
+  <h2>Movimientos</h2>
+  <div id="lista"></div>
+</div>
+
+<div id="repCard" class="card hide">
+  <h2>Reporte</h2>
+  <pre id="repTxt" class="rep"></pre>
+  <div class="seg" style="margin-top:10px">
+    <button onclick="copiarReporte()">📋 Copiar</button>
+    <button onclick="enviarWA()">💬 Enviar por WhatsApp</button>
+  </div>
+</div>
+
+<div class="card">
+  <button class="btn" style="margin-top:0" onclick="generarReporte()">Generar reporte</button>
+  <button class="btn sec" onclick="saldar()">Ya se saldó: empezar de cero</button>
+</div>
+
+<div style="text-align:center">
+  <button class="link" onclick="invitar()">Invitar a María Paula (link por WhatsApp)</button><br>
+  <button class="link" onclick="cambiarConexion()">Cambiar conexión</button>
+</div>
+
+</div>
+</div>
+
+<script>
+  const CFG_KEY = 'gastos5050_cfg', CACHE_KEY = 'gastos5050_cache';
+  let datos = [], pago = 'Nacho', ocupado = false, reporteTxt = '';
+
+  const $ = id => document.getElementById(id);
+  const fmt = n => '$' + Math.round(n).toLocaleString('es-AR');
+  const hoy = () => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
+  const fd = s => s.slice(8, 10) + '/' + s.slice(5, 7);
+
+  // ---------- Configuración (queda guardada en cada celu) ----------
+  function getCfg() { try { return JSON.parse(localStorage.getItem(CFG_KEY)); } catch (e) { return null; } }
+  function setCfg(c) { try { localStorage.setItem(CFG_KEY, JSON.stringify(c)); } catch (e) {} }
+
+  function leerInvitacion() {
+    // Link de invitación: https://.../#u=<url>&k=<clave>
+    if (!location.hash || location.hash.length < 3) return;
+    const p = new URLSearchParams(location.hash.slice(1));
+    const u = p.get('u'), k = p.get('k');
+    if (u && k) setCfg({ url: u, key: k });
+    history.replaceState(null, '', location.pathname + location.search);
+  }
+
+  function conectar() {
+    const url = $('cfgUrl').value.trim(), key = $('cfgKey').value.trim();
+    if (!/^https:\/\/script\.google\.com\/.+\/exec$/.test(url)) { alert('La URL tiene que ser la de la aplicación web y terminar en /exec'); return; }
+    if (!key) { alert('Falta la clave'); return; }
+    setCfg({ url, key });
+    iniciar();
+  }
+
+  function cambiarConexion() {
+    if (!confirm('¿Cambiar la conexión con la hoja?')) return;
+    try { localStorage.removeItem(CFG_KEY); } catch (e) {}
+    iniciar();
+  }
+
+  function invitar() {
+    const c = getCfg(); if (!c) return;
+    const link = location.origin + location.pathname + '#u=' + encodeURIComponent(c.url) + '&k=' + encodeURIComponent(c.key);
+    const msg = 'Abrí este link desde el celu para instalar la app de gastos 50-50 (después "Agregar a pantalla de inicio"):\n' + link;
+    window.open('https://wa.me/?text=' + encodeURIComponent(msg), '_blank');
+  }
+
+  // ---------- API ----------
+  async function api(accion, extra) {
+    const c = getCfg();
+    if (!c) throw new Error('Falta conectar con la hoja');
+    let res;
+    try {
+      res = await fetch(c.url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify(Object.assign({ token: c.key, accion }, extra || {}))
+      });
+    } catch (e) { throw new Error('Sin conexión'); }
+    let j;
+    try { j = await res.json(); } catch (e) { throw new Error('No pude leer la respuesta. Revisá que la implementación sea para "Cualquier persona"'); }
+    if (!j.ok) throw new Error(j.error === 'NO_AUTORIZADO' ? 'La clave no coincide con la de Code.gs' : j.error);
+    return j.datos;
+  }
+
+  function estado(txt, err) { const e = $('estado'); e.textContent = txt || ''; e.className = err ? 'err' : ''; }
+
+  function setDatos(d) {
+    datos = d;
+    try { localStorage.setItem(CACHE_KEY, JSON.stringify(d)); } catch (e) {}
+    render();
+  }
+
+  async function cargar() {
+    estado('Sincronizando…');
+    try { setDatos(await api('listar')); estado('✓ Al día'); }
+    catch (e) { estado(e.message, true); }
+  }
+
+  // ---------- Cálculos ----------
+  function neto() { return datos.reduce((a, g) => a + (g.pago === 'Nacho' ? g.monto : 0) - g.monto * g.pctNacho / 100, 0); }
+  function ultimoCierre() { return datos.filter(g => g.tipo === 'Pago').reduce((m, g) => Math.max(m, g.creado || 0), 0); }
+  function delPeriodo() { const c = ultimoCierre(); return datos.filter(g => g.tipo === 'Gasto' && (g.creado || 0) > c); }
+
+  // ---------- Pantalla ----------
+  function seg(id, cb) {
+    document.querySelectorAll('#' + id + ' button').forEach(b => b.onclick = () => {
+      document.querySelectorAll('#' + id + ' button').forEach(x => x.classList.remove('on'));
+      b.classList.add('on'); cb(b.dataset.v);
+    });
+  }
+  seg('segPago', v => pago = v);
+
+  function render() {
+    const n = neto();
+    const txt = $('saldoTxt'), mon = $('saldoMonto');
+    if (Math.abs(n) < 1) { txt.textContent = 'Están a mano'; mon.textContent = '✓'; mon.className = 'big ok'; }
+    else { txt.textContent = n > 0 ? 'María Paula le debe a Nacho' : 'Nacho le debe a María Paula'; mon.textContent = fmt(Math.abs(n)); mon.className = 'big'; }
+    $('totMes').textContent = fmt(delPeriodo().reduce((a, g) => a + g.monto, 0));
+
+    const lista = $('lista');
+    lista.textContent = '';
+    const orden = datos.slice().sort((a, b) => b.fecha.localeCompare(a.fecha) || (b.creado || 0) - (a.creado || 0));
+    if (!orden.length) { const d = document.createElement('div'); d.className = 'mut'; d.textContent = 'Todavía no hay movimientos'; lista.appendChild(d); return; }
+    orden.slice(0, 60).forEach(g => {
+      const row = document.createElement('div'); row.className = 'row';
+      const izq = document.createElement('div');
+      izq.appendChild(document.createTextNode(g.descripcion || g.categoria));
+      const sm = document.createElement('small');
+      sm.textContent = g.fecha + ' · ' + (g.tipo === 'Pago' ? 'Cierre · saldo pagado por ' + g.pago : 'Pagó ' + g.pago + ' · ' + g.categoria);
+      izq.appendChild(sm);
+      const der = document.createElement('div'); der.style.whiteSpace = 'nowrap';
+      const b = document.createElement('b'); b.textContent = fmt(g.monto);
+      const x = document.createElement('button'); x.className = 'x'; x.textContent = '✕'; x.setAttribute('aria-label', 'Borrar');
+      x.onclick = () => borrar(g.id);
+      der.appendChild(b); der.appendChild(x);
+      row.appendChild(izq); row.appendChild(der);
+      lista.appendChild(row);
+    });
+  }
+
+  function bloquear(v) { ocupado = v; document.querySelectorAll('#app .btn').forEach(b => b.disabled = v); }
+
+  async function enviar(accion, extra, okTxt) {
+    if (ocupado) return false;
+    bloquear(true); estado('Guardando…');
+    try { setDatos(await api(accion, extra)); estado(okTxt || '✓ Guardado'); return true; }
+    catch (e) { estado(e.message, true); alert('No se pudo guardar: ' + e.message); return false; }
+    finally { bloquear(false); }
+  }
+
+  async function agregar() {
+    const monto = parseFloat($('monto').value);
+    if (!(monto > 0)) { alert('Poné un monto'); return; }
+    const ok = await enviar('agregar', { gasto: { fecha: $('fecha').value || hoy(), descripcion: $('desc').value.trim(), categoria: $('cat').value, monto, pago, pctNacho: 50, tipo: 'Gasto' } });
+    if (ok) { $('desc').value = ''; $('monto').value = ''; $('fecha').value = hoy(); }
+  }
+
+  async function borrar(id) {
+    if (!confirm('¿Borrar este movimiento?')) return;
+    await enviar('borrar', { id }, '✓ Borrado');
+  }
+
+  // ---------- Reporte ----------
+  function armarReporte() {
+    const gs = delPeriodo();
+    if (!gs.length) return null;
+    const por = { 'Nacho': 0, 'María Paula': 0 }, cats = {};
+    gs.forEach(g => { por[g.pago] += g.monto; cats[g.categoria] = (cats[g.categoria] || 0) + g.monto; });
+    const total = gs.reduce((a, g) => a + g.monto, 0);
+    const fechas = gs.map(g => g.fecha).sort();
+    const n = neto();
+    const orden = Object.entries(cats).sort((a, b) => b[1] - a[1]);
+    let t = '*📊 Resumen de gastos*\n' + fd(fechas[0]) + ' al ' + fd(fechas[fechas.length - 1]) + '\n\n';
+    t += '*Cuánto gastó cada uno*\n• Nacho: ' + fmt(por['Nacho']) + '\n• María Paula: ' + fmt(por['María Paula']) + '\n*Total:* ' + fmt(total) + ' (' + fmt(total / 2) + ' c/u)\n\n';
+    t += '*Saldo*\n' + (Math.abs(n) < 1 ? 'Están a mano ✅' : (n > 0 ? 'María Paula le debe a Nacho ' : 'Nacho le debe a María Paula ') + fmt(Math.abs(n))) + '\n\n';
+    t += '*Categoría que más se gastó*\n' + orden[0][0] + ': ' + fmt(orden[0][1]) + ' (' + Math.round(orden[0][1] / total * 100) + '%)\n\n';
+    t += '*Por categoría*\n' + orden.map(([c, m]) => '• ' + c + ': ' + fmt(m)).join('\n');
+    return t;
+  }
+
+  function mostrarReporte(t) {
+    reporteTxt = t;
+    $('repTxt').textContent = t;
+    const c = $('repCard');
+    c.classList.remove('hide');
+    c.scrollIntoView({ behavior: 'smooth' });
+  }
+  function generarReporte() {
+    const t = armarReporte();
+    if (!t) { alert('Todavía no hay gastos en este período'); return; }
+    mostrarReporte(t);
+  }
+  function copiarReporte() {
+    const ok = () => alert('Reporte copiado ✅');
+    const fb = () => { const ta = document.createElement('textarea'); ta.value = reporteTxt; document.body.appendChild(ta); ta.select(); try { document.execCommand('copy'); ok(); } catch (e) { alert('No pude copiar'); } ta.remove(); };
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(reporteTxt).then(ok, fb); else fb();
+  }
+  function enviarWA() { window.open('https://wa.me/?text=' + encodeURIComponent(reporteTxt), '_blank'); }
+
+  async function saldar() {
+    const n = neto();
+    const debe = Math.abs(n) >= 1;
+    if (!confirm('¿Registrar que ya se saldó' + (debe ? ' (' + fmt(Math.abs(n)) + ')' : '') + ' y empezar de cero? Antes te armo el reporte.')) return;
+    const t = armarReporte();
+    const ok = await enviar('agregar', { gasto: { fecha: hoy(), descripcion: 'Cierre de período', categoria: 'Pago', monto: debe ? Math.abs(n) : 0, pago: n > 0 ? 'María Paula' : 'Nacho', pctNacho: n > 0 ? 100 : 0, tipo: 'Pago' } }, '✓ Período cerrado');
+    if (ok && t) mostrarReporte(t);
+  }
+
+  // ---------- Inicio ----------
+  function iniciar() {
+    const c = getCfg();
+    $('setup').classList.toggle('hide', !!c);
+    $('app').classList.toggle('hide', !c);
+    if (!c) { estado(''); return; }
+    try { const cache = JSON.parse(localStorage.getItem(CACHE_KEY)); if (Array.isArray(cache)) datos = cache; } catch (e) {}
+    $('fecha').value = hoy();
+    render();
+    cargar();
+  }
+
+  document.addEventListener('visibilitychange', () => { if (!document.hidden && getCfg() && !ocupado) cargar(); });
+
+  leerInvitacion();
+  iniciar();
+
+  if ('serviceWorker' in navigator) window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+</script>
+</body>
+</html>
